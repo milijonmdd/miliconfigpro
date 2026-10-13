@@ -1,0 +1,45 @@
+name = "miliconfigpro"
+main = "worker/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+
+# Only API routes and member status pages invoke the worker; every static
+# asset (JS/CSS/HTML/icons) is served directly by Cloudflare's edge asset
+# layer — no worker invocation, no cold start, much faster loads.
+# The panel's D1 database is declared here so EVERY deploy path (Cloudflare
+# Builds' plain `npx wrangler deploy`, deploy.sh, manual) always carries the
+# binding — it can never be wiped by a deploy again.
+# Non-secret configuration. The account named here is the panel owner: only it
+# sees the Telegram deployer bot section (nav item, routes and /api/bot-*).
+[vars]
+OWNER_EMAIL = "milad201400@gmail.com"
+# Optional: public URL of the panel UI when it is served from a domain other
+# than this Worker (a static host, GitHub Pages, …). The bot's "باز کردن پنل"
+# menu button and links inside bot screens use it. Empty = this Worker's origin.
+PANEL_URL = "https://miliconfigpro-v1.miliconfig.workers.dev/"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "miliconfigpro-v1"
+# Live database in the current account (the panel was migrated to a new
+# Cloudflare account; the old id c01cf634-… no longer exists there).
+database_id = "953aaae4-0f03-4e5e-8d69-05d70d25189f"
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*", "/status/*"]
+
+# Move the worker close to the D1 database — the panel does many sequential
+# D1 round-trips per request, so co-locating them cuts real-world latency.
+# (Enabled programmatically per-deploy via the script settings API in deploy.ts.)
+
+# The dedicated panel must not drift behind its upstream repository, so a cron
+# collector rebuilds every deployment that opted into "بروزرسانی خودکار" when a
+# newer commit appears (see the `scheduled` handler in worker/index.ts).
+[triggers]
+crons = ["17 */6 * * *"]
+
+[observability]
+enabled = true
